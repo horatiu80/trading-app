@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trading</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script src="sockjs-0.3.4.js"></script>
+    <script src="stomp.js"></script>
+	<script src="jquery-latest.js"></script> 
+	<script src="jquery.tablesorter.js"></script>
+	<script type="text/javascript" src="smoothie.js"></script>
+    <script type="text/javascript">
+        var lastSecond = (new Date()).getSeconds();
+        var egRate = 0;
+        var euRate = 0;        
+    	if (!window.console) console = {log: function() {}};
+        var stompClient = null;
+
+        function connect() {
+            var socket = new SockJS('/mweb');
+            stompClient = Stomp.over(socket);            
+            stompClient.connect({}, function(frame) {
+                console.log('Connected: ' + frame);
+                stompClient.subscribe('/topic/trading', function(resp){
+                	var body = JSON.parse(resp.body);
+                	if(body.content == 'doNothing') {
+                		// do nothing
+                	}
+                	else if(body.content == 'buy' || body.content == 'sell') {
+                		buildTotal(body);
+                	}
+                	else {
+                		populateData(body.userId, body.currencyFrom, body.currencyTo, body.amountSell,
+                            	body.amountBuy, body.rate, body.timePlaced, body.originatingCountry);
+                	}
+                                        
+                });
+            });
+        }
+        
+        function disconnect() {
+            stompClient.disconnect();
+            console.log("Disconnected");
+        }
+
+        function test() {
+            stompClient.send("/app/mweb", {}, JSON.stringify({ 'name': 'test' }));
+        }
+        
+        function populateData(userId, currencyFrom, currencyTo, amountSell,
+            	amountBuy, rate, timePlaced, originatingCountry) {
+         
+	         var tbody = document.getElementById('myTable').getElementsByTagName('tbody')[0];;
+	         var row = tbody.insertRow(0);
+	         var cell1 = row.insertCell(0);
+	         var cell2 = row.insertCell(1);
+	         var cell3 = row.insertCell(2);
+	         var cell4 = row.insertCell(3);
+	         var cell5 = row.insertCell(4);
+	         var cell6 = row.insertCell(5);
+	         var cell7 = row.insertCell(6);
+	         var cell8 = row.insertCell(7);
+	         cell1.innerHTML = userId + "";
+	         cell2.innerHTML = currencyFrom + "";
+	         cell3.innerHTML = currencyTo + "";
+	         cell4.innerHTML = amountSell + "";
+	         cell5.innerHTML = amountBuy + "";
+	         cell6.innerHTML = rate + "";
+	         cell7.innerHTML = timePlaced + "";
+	         cell8.innerHTML = originatingCountry + "";
+	         
+	         var count = $('#myTable tr').length;
+	         if (count > 11) {
+	        	 tbody.deleteRow(-1);
+	         }
+	         
+	         $("#myTable").trigger("update");
+	         
+	         if (currencyFrom == "EUR" && currencyTo == "GBP")
+	        	 egRate = rate;
+	         
+	         if (currencyFrom == "EUR" && currencyTo == "USD")
+	        	 euRate = rate;
+	         
+	         var actualDate = new Date();
+	         if (actualDate.getSeconds() != lastSecond) {
+		         glRate = rate;
+		         lastSecond = actualDate.getSeconds();
+	         }    
+	     }
+        
+        function buildTotal(body) {        	
+        	 var currencyInserted = false;
+	         $('#currency_sold tr').each(function() {
+	        	    var currency = $(this).find("td").eq(0).html();	        	    
+	        	    if (currency == body.currency) {
+	        	    	if (body.content == 'sell') {
+	        	    		$(this).find("td").eq(1).html(body.value);
+	        	    	}
+	        	    	else if (body.content == 'buy') {
+	        	    		$(this).find("td").eq(2).html(body.value);
+	        	    	}
+ 	        	    	currencyInserted = true;
+	        	    }
+	         });
+        	
+	         if (!currencyInserted) {
+	        	 var tbody = document.getElementById('currency_sold').getElementsByTagName('tbody')[0];;
+		         var row = tbody.insertRow(0);
+		         var cell1 = row.insertCell(0);
+		         var cell2 = row.insertCell(1);
+		         var cell3 = row.insertCell(2);	   		         
+		         cell1.innerHTML = body.currency;
+		         cell2.innerHTML = body.value + "";
+		         cell3.innerHTML = body.value + "";
+		         var count = $('#currency_sold tr').length;
+		         $("#currency_sold").trigger("update");
+	         }
+	     }
+
+        $(document).ready(function() { 
+            $("#currency_sold").tablesorter();
+            $("#myTable").tablesorter({ 
+                // sort on the first column, order asc 
+                sortList: [[0,0]] 
+            });
+
+        });
+        
+        connect();
+        
+    </script>
+</head>
+<body>
+<noscript><h2 style="color: #ff0000">Seems your browser doesn't support Javascript! Websocket relies on Javascript being enabled. Please enable
+    Javascript and reload this page!</h2></noscript>
+
+ <button type="button" onclick="test()">Test</button><br><br>
+
+Rate evolution EUR/GBP(dark color) and  EUR/USD(white color):<br><br>
+<canvas id="mycanvas" width="800" height="100"></canvas>
+<br><br>
+Last 10 operations:
+<table id="myTable" class="tablesorter"> 
+	<thead> 
+	<tr> 
+	    <th style = "width: 150px">User Id</th> 
+	    <th style = "width: 150px">From</th> 
+	    <th style = "width: 150px">To</th> 
+	    <th style = "width: 150px">Sell</th> 
+	    <th style = "width: 150px">Buy</th> 
+	    <th style = "width: 150px">Rate</th>
+	    <th style = "width: 150px">Time</th>
+	    <th style = "width: 100px">Country</th>	    
+	</tr> 
+	</thead> 
+	<tbody> 
+
+	</tbody> 
+</table>
+Total Selling and Buying / Currency: 
+<div style="width: 350px">
+<table id="currency_sold" class="tablesorter"> 
+	<thead> 
+	<tr> 
+	    <th style = "width: 150px">Currency</th> 
+	    <th style = "width: 150px">Selling</th> 
+	    <th style = "width: 150px">Buying</th>     
+	</tr> 
+	</thead>
+	<tbody> 
+
+	</tbody>  
+</table>
+</div>
+
+<script>
+	var smoothie = new SmoothieChart(
+			{
+				grid: { fillStyle:'rgb(226, 221, 221)' },
+				labels: {fillStyle:'#000000'},				
+			}
+	);
+	smoothie.streamTo(document.getElementById("mycanvas"), 1000 /*delay*/);
+	// Data
+	var line1 = new TimeSeries();
+	var line2 = new TimeSeries();
+
+	// Add a random value to each line every second
+	setInterval(function() {
+	  line1.append(new Date().getTime(), egRate);
+	  line2.append(new Date().getTime(), euRate);
+	}, 1000);
+
+	// Add to SmoothieChart
+	smoothie.addTimeSeries(line1, { strokeStyle:'rgb(0, 0, 0)'});
+	smoothie.addTimeSeries(line2);
+</script>
+</body>
+</html>
